@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SOSStatus {
+  OPEN
+  PICKED
+  CLOSED
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+model User {
+  id               String   @id @default(uuid())
+  email            String   @unique
+  name             String?
+  passwordHash     String
+  credibilityScore Int      @default(50)
+  karmaBalance     Int      @default(100)
+  department       String?
+  year             Int?
+  bio              String?
+  careerGoal       String?
+  interests        Json?
+  projects         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  skills           UserSkill[]
+  karmaLines       KarmaLedgerEntry[]
+  sosRequests      SOSRequest[] @relation("SosAuthor")
+  sosPicked        SOSRequest[] @relation("SosPicker")
+  sosMessages      SosChatMessage[]
+  communityListings CommunityListing[]
+  connectionsSent   ConnectionRequest[] @relation("ConnectionsSent")
+  connectionsRecv   ConnectionRequest[] @relation("ConnectionsRecv")
+}
+
+model CommunityListing {
+  id        String   @id @default(cuid())
+  category  String
+  title     String
+  theme     String?
+  stack     String[]
+  openSlots Int      @default(1)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([category, createdAt])
+}
+
+model UserSkill {
+  id          String   @id @default(cuid())
+  userId      String
+  skill       String
+  proficiency Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skill])
+  @@index([skill])
+}
+
+model KarmaLedgerEntry {
+  id             String   @id @default(cuid())
+  userId         String
+  delta          Int
+  balanceAfter   Int
+  reason         String
+  counterpartyId String?
+  correlationId  String
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, correlationId])
+  @@index([userId, createdAt])
+}
+
+model KarmaIdempotency {
+  userId    String
+  clientKey String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@id([userId, clientKey])
+}
+
+model SOSRequest {
+  id             String    @id @default(cuid())
+  userId         String
+  pickedByUserId String?
+  title          String
+  description    String?
+  topicTag       String    @default("general")
+  targetSkill    String    @default("general")
+  bountyKarma    Int       @default(0)
+  bonusKarma     Int       @default(0)
+  deadlineAt     DateTime?
+  lockHolderUserId String?
+  lockExpiresAt  DateTime?
+  status         SOSStatus @default(OPEN)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation("SosAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  pickedBy       User?     @relation("SosPicker", fields: [pickedByUserId], references: [id], onDelete: SetNull)
+  messages       SosChatMessage[]
+
+  @@index([status, createdAt])
+  @@index([pickedByUserId])
+  @@index([targetSkill, status, createdAt])
+  @@index([lockHolderUserId, lockExpiresAt])
+}
+
+model SosChatMessage {
+  id        String   @id @default(cuid())
+  sosId     String
+  sos       SOSRequest @relation(fields: [sosId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([sosId, createdAt])
+}
+
+model ConnectionRequest {
+  id         String           @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  status     ConnectionStatus @default(PENDING)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  fromUser   User             @relation("ConnectionsSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser     User             @relation("ConnectionsRecv", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId, status, createdAt])
+  @@index([fromUserId, status, createdAt])
+}

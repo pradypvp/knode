@@ -1,0 +1,37 @@
+# Second isolated stack (different DB + Redis) — same images as default compose.
+# Usage: docker compose -f docker-compose.instance2.yml -p knode2 up -d
+# Then point backend .env at localhost:5433 and :16380 (see backend/.env.instance2.example).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: knode
+      POSTGRES_PASSWORD: knode
+      POSTGRES_DB: knode
+    ports:
+      - "5433:5432"
+    volumes:
+      - knode2_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U knode -d knode"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "16380:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - knode2_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  knode2_pg:
+  knode2_redis:
